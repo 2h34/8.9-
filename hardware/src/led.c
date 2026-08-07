@@ -97,6 +97,12 @@ void flow_led(void)
         case FLOW_SINGLE:
             for (uint8_t i = 0U; i < LED_COUNT; i++)
             {
+                update_mode();//让它在每控制一颗灯之前重新检查一次信号
+                if (current_mode != FLOW_SINGLE)    
+                {
+                    break;
+                }
+
                 blink_config config = {i, 250U, 250U};
                 blink(config);
             }
@@ -104,6 +110,12 @@ void flow_led(void)
         case FLOW_PAIR:
             for (uint8_t i = 0U; i < LED_COUNT-1U; i++)
             {
+                update_mode();//让它在每控制一颗灯之前重新检查一次信号
+                if (current_mode != FLOW_PAIR)    
+                {
+                    break;
+                }
+
                 led_on(i);
                 led_on(i+1U);
 
@@ -127,7 +139,7 @@ void flow_led(void)
             {
                 led_off(i);
             }
-            
+
             HAL_Delay(250U);
             break;
         default:
