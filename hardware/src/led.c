@@ -4,9 +4,15 @@
  */
 #include "led.h"
 
+typedef struct
+{
+    uint8_t led_num;
+    uint16_t on_ms;
+    uint16_t off_ms; 
+} blink_config;
 
 /* 点亮 LED */
-void led_on(uint8_t led_num)
+static void led_on(uint8_t led_num)
 {
     if (!IS_VALID_LED(led_num))
     {
@@ -34,7 +40,7 @@ void led_on(uint8_t led_num)
 
 
 /* 熄灭 LED */
-void led_off(uint8_t led_num)
+static void led_off(uint8_t led_num)
 {
     if (!IS_VALID_LED(led_num))
     {
@@ -60,14 +66,31 @@ void led_off(uint8_t led_num)
 
 }
 
+static void blink(blink_config config);
+
+
 //流水灯函数
 void flow_led(void)
 {
-    for (int i = 0; i < LED_COUNT; i++)
+    for (uint8_t i = 0U; i < LED_COUNT; i++)
     {
-        led_on(i);
-        HAL_Delay(250U);
-        led_off(i);
-        HAL_Delay(250U);
+        blink_config config = {i, 250U, 250U};
+        blink(config);
     }
+}
+
+
+// 闪烁 LED 函数
+static void blink(blink_config config)
+{
+    if (!IS_VALID_LED(config.led_num))
+    {
+        return;
+    }
+
+    led_on(config.led_num);
+    HAL_Delay(config.on_ms);
+
+    led_off(config.led_num);
+    HAL_Delay(config.off_ms);
 }
