@@ -59,3 +59,15 @@ void led_off(uint8_t led_num)
     }
 
 }
+
+//流水灯函数
+void flow_led(void)
+{
+    for (int i = 0; i < LED_COUNT; i++)
+    {
+        led_on(i);
+        HAL_Delay(250U);
+        led_off(i);
+        HAL_Delay(250U);
+    }
+}
