@@ -5,27 +5,58 @@
 #include "led.h"
 
 //外部变量声明
-extern int signal;
+volatile extern int signal;
 
 
-//结构体定义
+// //结构体定义
+// typedef struct
+// {
+//     uint8_t led_num;
+//     uint16_t on_ms;
+//     uint16_t off_ms; 
+// } blink_config;
+
+//题目五计时器结构体定义
 typedef struct
 {
-    uint8_t led_num;
-    uint16_t on_ms;
-    uint16_t off_ms; 
-} blink_config;
+    uint32_t start_tick;
+    uint32_t duration_ms;
+    uint8_t active;
+} timer_t;
 
-//枚举定义
+
+
+//流水灯模式枚举定义
 typedef enum
 {
-    FLOW_SINGLE = 0,
+    FLOW_IDLE =0,
+    FLOW_SINGLE,
     FLOW_PAIR,
     FLOW_ALL    
 } flow_mode;
 
+//灯的亮灭状态枚举定义
+typedef enum
+{
+    LED_STEP_ON = 0,
+    LED_STEP_OFF
+} led_step_t;
+
+
+
+
 // 流水灯模式变量
-static flow_mode current_mode = FLOW_SINGLE;
+static flow_mode current_mode = FLOW_IDLE;
+
+//题目五计时器变量
+static timer_t led_timer;
+
+//灯亮灭状态变量
+static led_step_t current_step = LED_STEP_ON;
+
+//当前亮的灯
+static uint8_t current_led = 0U;
+
 
 
 /* 点亮 LED */
@@ -83,65 +114,107 @@ static void led_off(uint8_t led_num)
 
 }
 
-static void blink(blink_config config);
+// static void blink(blink_config config);
 
 static void update_mode(void);
+static void timer_start(timer_t *timer,uint32_t duration_ms);
+static uint8_t timer_expired(timer_t *timer);
+static void mode_init(void);
 
 //流水灯函数
 void flow_led(void)
 {
+    flow_mode previuos_mode = current_mode;
     update_mode();
+    if (current_mode != previuos_mode)
+    {
+        mode_init();
+    }
 
     switch (current_mode)
     {
+        case FLOW_IDLE:
+            for (uint8_t i = 0U; i < LED_COUNT; i++)
+            {
+                led_off(i);
+            }
+            break;
+
         case FLOW_SINGLE:
-            for (uint8_t i = 0U; i < LED_COUNT; i++)
+            if (timer_expired(&led_timer))
             {
-                update_mode();//让它在每控制一颗灯之前重新检查一次信号
-                if (current_mode != FLOW_SINGLE)    
+                if (current_step == LED_STEP_ON)
                 {
-                    break;
+                    /* code */
+                    led_off(current_led);
+                    current_step = LED_STEP_OFF;
+                    timer_start(&led_timer,250U);
                 }
-
-                blink_config config = {i, 250U, 250U};
-                blink(config);
+                else
+                {
+                    current_led++;
+                    if (current_led >= LED_COUNT)
+                    {
+                        current_led = 0U;
+                    }
+                    led_on(current_led);
+                    current_step = LED_STEP_ON;
+                    timer_start(&led_timer, 250U);
+                }
             }
             break;
+
         case FLOW_PAIR:
-            for (uint8_t i = 0U; i < LED_COUNT-1U; i++)
+            if (timer_expired(&led_timer))
             {
-                update_mode();//让它在每控制一颗灯之前重新检查一次信号
-                if (current_mode != FLOW_PAIR)    
+                if (current_step == LED_STEP_ON)
                 {
-                    break;
+                    /* code */
+                    led_off(current_led);
+                    led_off(current_led + 1U);
+                    current_step = LED_STEP_OFF;
+                    timer_start(&led_timer,250U);
                 }
-
-                led_on(i);
-                led_on(i+1U);
-
-                HAL_Delay(250U);
-
-                led_off(i);
-                led_off(i+1U);
-
-                HAL_Delay(250U);
+                else
+                {
+                    current_led++;
+                    if (current_led >= LED_COUNT-1)
+                    {
+                        current_led = 0U;
+                    }
+                    led_on(current_led);
+                    led_on(current_led + 1U);
+                    current_step = LED_STEP_ON;
+                    timer_start(&led_timer, 250U);
+                }
             }
             break;
+
         case FLOW_ALL:
-            for (uint8_t i = 0U; i < LED_COUNT; i++)
+            if (timer_expired(&led_timer))
             {
-                led_on(i);
+                if (current_step == LED_STEP_ON)
+                {
+                    /* code */
+                    for (uint8_t i = 0U; i < LED_COUNT; i++)
+                    {
+                        led_off(i);
+                    }
+                    current_step = LED_STEP_OFF;
+                    timer_start(&led_timer,250U);
+                }
+                else
+                {
+                    for (uint8_t i = 0U; i < LED_COUNT; i++)
+                    {
+                        led_on(i);
+                    }
+                    current_step = LED_STEP_ON;
+                    timer_start(&led_timer, 250U);
+                }
             }
-
-            HAL_Delay(250U);
-
-            for (uint8_t i = 0U; i < LED_COUNT; i++)
-            {
-                led_off(i);
-            }
-
-            HAL_Delay(250U);
             break;
+
         default:
             break;
     }
@@ -149,33 +222,107 @@ void flow_led(void)
 }
 
 
-// 闪烁 LED 函数
-static void blink(blink_config config)
-{
-    if (!IS_VALID_LED(config.led_num))
-    {
-        return;
-    }
+// // 闪烁 LED 函数
+// static void blink(blink_config config)
+// {
+//     if (!IS_VALID_LED(config.led_num))
+//     {
+//         return;
+//     }
 
-    led_on(config.led_num);
-    HAL_Delay(config.on_ms);
+//     led_on(config.led_num);
+//     HAL_Delay(config.on_ms);
 
-    led_off(config.led_num);
-    HAL_Delay(config.off_ms);
-}
+//     led_off(config.led_num);
+//     HAL_Delay(config.off_ms);
+// }
 
 static void update_mode(void)
 {
+
     if (signal == 0)
     {
-        current_mode = FLOW_SINGLE;
+        current_mode = FLOW_IDLE;
     }
     else if (signal == 1)
     {
-        current_mode = FLOW_PAIR;
+        current_mode = FLOW_SINGLE;
     }
     else if (signal == 2)
     {
+        current_mode = FLOW_PAIR;
+    }
+    else if (signal == 3)
+    {
         current_mode = FLOW_ALL;
+    }
+}
+
+//定时器启动函数
+static void timer_start(timer_t *timer,uint32_t duration_ms)
+{
+    timer->start_tick = HAL_GetTick();
+    timer->duration_ms= duration_ms;
+    timer->active = 1U;
+}
+
+//定时器查询是否到期函数
+static uint8_t timer_expired(timer_t *timer)
+{
+    if (timer->active == 0U)
+    {
+        return 0U;
+    }
+    
+    if ((HAL_GetTick() - timer->start_tick) >= timer->duration_ms)
+    {
+        /* code */
+        timer->active = 0U;//单次触发，到期后不重新启动就会失效
+        return 1U;
+    }
+
+    return 0U;  
+}
+
+//初始化函数
+static void mode_init(void)
+{
+    for (uint8_t i = 0U; i < LED_COUNT; i++)
+    {
+        led_off(i);
+    }
+
+    current_led = 0U;
+    current_step = LED_STEP_ON;
+
+    led_timer.active = 0U;
+
+    switch (current_mode)
+    {
+        case FLOW_IDLE:
+            break;
+        
+        case FLOW_SINGLE:
+            led_on(current_led);
+            timer_start(&led_timer,250U);
+            break;
+        
+        case FLOW_PAIR:
+            led_on(current_led);
+            led_on(current_led + 1U);
+            timer_start(&led_timer, 250U);
+            break;
+
+        case FLOW_ALL:
+            for (uint8_t i = 0U; i < LED_COUNT; i++)
+            {
+                led_on(i);
+            }
+            timer_start(&led_timer, 250U);
+            break;
+
+        default:
+            break;
+
     }
 }

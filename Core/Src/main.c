@@ -53,7 +53,8 @@ void SystemClock_Config(void);
 static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
 
-int signal = 2; // 流水灯模式信号量（全局变量），0表示单个流水灯，1表示两个流水灯，2表示四个流水灯
+volatile int signal = 0; // 流水灯模式信号量（全局变量），0表示四灯全灭，
+//1表示单个流水灯，2表示两个流水灯，3表示四个流水灯
 
 /* USER CODE END PFP */
 
