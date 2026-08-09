@@ -3,9 +3,9 @@
  * @brief   LED 驱动实现文件。
  */
 #include "led.h"
-
+#include "buzzer.h"
 //外部变量声明
-volatile extern int signal;
+extern volatile int signal;
 
 
 // //结构体定义
@@ -23,6 +23,18 @@ typedef struct
     uint32_t duration_ms;
     uint8_t active;
 } timer_t;
+//题目六鸣叫结构体定义
+typedef struct
+{
+    uint32_t on_ms;
+    uint32_t off_ms;
+} beep_config;
+//题目六蜂鸣器模式结构体
+typedef struct
+{
+    uint8_t buzzer_enable;
+    beep_config beep;
+} mode_config;
 
 
 
@@ -41,6 +53,12 @@ typedef enum
     LED_STEP_ON = 0,
     LED_STEP_OFF
 } led_step_t;
+//蜂鸣器的响停状态枚举定义
+typedef enum
+{
+    BUZZER_STEP_ON = 0,
+    BUZZER_STEP_OFF
+} buzzer_step_t;
 
 
 
@@ -50,13 +68,40 @@ static flow_mode current_mode = FLOW_IDLE;
 
 //题目五计时器变量
 static timer_t led_timer;
+//题目六蜂鸣器计时器变量
+static timer_t buzzer_timer;
 
 //灯亮灭状态变量
 static led_step_t current_step = LED_STEP_ON;
+//蜂鸣器响停状态变量
+static buzzer_step_t buzzer_step = BUZZER_STEP_ON;
 
 //当前亮的灯
 static uint8_t current_led = 0U;
 
+//定义各模式蜂鸣器变量
+static const mode_config idle_config =
+{
+    0U,
+    {0U,0U}
+};
+static const mode_config single_config =
+{
+    0U,
+    {0U,0U}
+};
+static const mode_config pair_config =
+{
+    1U,
+    {200U,800U}
+};
+static const mode_config all_config =
+{
+    1U,
+    {50U,100U}
+};
+
+static const mode_config *current_config = &idle_config;
 
 
 /* 点亮 LED */
@@ -120,13 +165,14 @@ static void update_mode(void);
 static void timer_start(timer_t *timer,uint32_t duration_ms);
 static uint8_t timer_expired(timer_t *timer);
 static void mode_init(void);
+static void buzzer_update(void);
 
 //流水灯函数
 void flow_led(void)
 {
-    flow_mode previuos_mode = current_mode;
+    flow_mode previous_mode = current_mode;
     update_mode();
-    if (current_mode != previuos_mode)
+    if (current_mode != previous_mode)
     {
         mode_init();
     }
@@ -178,7 +224,7 @@ void flow_led(void)
                 else
                 {
                     current_led++;
-                    if (current_led >= LED_COUNT-1)
+                    if (current_led >= LED_COUNT - 1U)
                     {
                         current_led = 0U;
                     }
@@ -218,7 +264,7 @@ void flow_led(void)
         default:
             break;
     }
-    
+    buzzer_update();
 }
 
 
@@ -287,6 +333,7 @@ static uint8_t timer_expired(timer_t *timer)
 //初始化函数
 static void mode_init(void)
 {
+    //清除灯状态
     for (uint8_t i = 0U; i < LED_COUNT; i++)
     {
         led_off(i);
@@ -294,26 +341,37 @@ static void mode_init(void)
 
     current_led = 0U;
     current_step = LED_STEP_ON;
-
     led_timer.active = 0U;
+
+    //清除蜂鸣器状态
+    buzzer_off();
+    buzzer_step = BUZZER_STEP_ON;
+    buzzer_timer.active = 0U;
 
     switch (current_mode)
     {
         case FLOW_IDLE:
+            current_config = &idle_config;
             break;
         
         case FLOW_SINGLE:
+            current_config = &single_config;
+
             led_on(current_led);
             timer_start(&led_timer,250U);
             break;
         
         case FLOW_PAIR:
+            current_config = &pair_config;
+            
             led_on(current_led);
             led_on(current_led + 1U);
             timer_start(&led_timer, 250U);
             break;
 
         case FLOW_ALL:
+            current_config = &all_config;
+
             for (uint8_t i = 0U; i < LED_COUNT; i++)
             {
                 led_on(i);
@@ -325,4 +383,31 @@ static void mode_init(void)
             break;
 
     }
+    if (current_config->buzzer_enable)
+    {
+        buzzer_on();
+        timer_start(&buzzer_timer, current_config->beep.on_ms);
+    }
+
+}
+
+//题目六蜂鸣器更新函数
+static void buzzer_update(void)
+{
+    if (timer_expired(&buzzer_timer))
+            {
+                if (buzzer_step == BUZZER_STEP_ON)
+                {
+                    buzzer_off();
+                    buzzer_step = BUZZER_STEP_OFF;
+                    timer_start(&buzzer_timer, current_config->beep.off_ms);
+                }
+                else
+                {
+                    buzzer_on();
+                    buzzer_step = BUZZER_STEP_ON;
+                    timer_start(&buzzer_timer, current_config->beep.on_ms);
+                }
+            }
+
 }
