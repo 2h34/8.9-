@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "tim.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -95,12 +96,15 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
+	
   /* 上电蜂鸣提示 */
   buzzer_on();
   HAL_Delay(100U);
   buzzer_off();
-
+	
+	HAL_TIM_Base_Start_IT(&htim6);
   /* 题目3完成后，在这里调用封装好的流水灯初始化/运行函数 */
 
   /* USER CODE END 2 */
@@ -112,7 +116,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    flow_led();
+    //flow_led();
   }
   /* USER CODE END 3 */
 }
@@ -177,7 +181,16 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM6)
+    {
+			HAL_GPIO_TogglePin(LED_GPIO_PORT, LED1_PIN);
+        /* 你自己写：LED1 翻转 */
+				
+				
+    }
+}
 /* USER CODE END 4 */
 
  /* MPU Configuration */
