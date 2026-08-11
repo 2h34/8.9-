@@ -19,13 +19,15 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "tim.h"
+#include "usart.h"
 #include "gpio.h"
+
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "led.h"
 #include "buzzer.h"
-
+#include "byte_queue.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,14 +48,15 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+uint8_t rx_data;
+byte_queue_t rx_queue;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
-
+void command_process(uint8_t data);
 volatile int signal = 0; // 流水灯模式信号量（全局变量），0表示四灯全灭，
 //1表示单个流水灯，2表示两个流水灯，3表示四个流水灯
 
@@ -61,7 +64,29 @@ volatile int signal = 0; // 流水灯模式信号量（全局变量），0表示
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+void command_process(uint8_t data)
+{
+  // 后面在这里写命令解析
+  switch (data)
+  {
+    case '0':
+      signal = 0;
+      break;
+    case '1':
+      signal = 1;
+      break;
+    case '2':
+      signal = 2;
+      break;
+    case '3':
+      signal = 3;
+      break;
+    
+      break;
+    default:
+      break;
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -97,22 +122,37 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM6_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-	
+
   /* 上电蜂鸣提示 */
   buzzer_on();
   HAL_Delay(100U);
   buzzer_off();
 	
 	HAL_TIM_Base_Start_IT(&htim6);
-  /* 题目3完成后，在这里调用封装好的流水灯初始化/运行函数 */
 
+  byte_queue_init(&rx_queue);
+
+	HAL_UART_Receive_IT(&huart1, &rx_data, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
+    uint8_t data;       // 存 pop 出来的字节
+    bool result;        // pop 是否成功
+    uint32_t primask;   // 保存原中断状态
+    primask = __get_PRIMASK();
+    __disable_irq();
+    result = byte_queue_pop(&rx_queue, &data);
+    __set_PRIMASK(primask);
+    if (result)
+    {
+      command_process(data);
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -189,6 +229,17 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         /* 你自己写：LED1 翻转 */
 				
 				
+    }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1)
+    {
+        // 将接收到的数据放入队列
+        byte_queue_push(&rx_queue, rx_data);
+        // 重新启动接收中断
+        HAL_UART_Receive_IT(huart, &rx_data, 1);
     }
 }
 /* USER CODE END 4 */
